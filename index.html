@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shaper - 健身动作识别</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #2196F3;
+            --dark-color: #333;
+            --light-color: #f4f4f4;
+            --danger-color: #f44336;
+            --success-color: #4CAF50;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background-color: var(--light-color);
+            color: var(--dark-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        #video {
+            width: 100%;
+            height: auto;
+            display: block;
+            background-color: #000;
+        }
+        
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 800px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        select {
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            background-color: white;
+        }
+        
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 10px;
+            min-width: 120px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            text-align: center;
+            width: 100%;
+            max-width: 800px;
+        }
+        
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.9);
+            z-index: 1000;
+        }
+        
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            color: var(--danger-color);
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #ffebee;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 800px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        footer {
+            margin-top: auto;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 14px;
+            width: 100%;
+        }
+        
+        @media (max-width: 768px) {
+            .video-container {
+                height: auto;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            .btn, select {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>正在加载模型，请稍候...</p>
+    </div>
+    
+    <div id="error" class="error hidden">
+        加载模型失败，请检查网络连接并刷新页面重试。
+    </div>
+    
+    <header>
+        <h1>Shaper - 健身动作识别</h1>
+        <p>使用AI技术实时识别和计数您的健身动作</p>
+    </header>
+    
+    <div class="container">
+        <div class="video-container">
+            <video id="video" playsinline></video>
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <div class="controls">
+            <select id="exercise-select">
+                <option value="pushup">俯卧撑</option>
+                <option value="squat">深蹲</option>
+            </select>
+            <button id="start-btn" class="btn btn-primary" disabled>开始</button>
+            <button id="stop-btn" class="btn btn-danger" disabled>停止</button>
+            <button id="reset-btn" class="btn btn-secondary">重置</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div id="count" class="stat-value">0</div>
+                <div class="stat-label">计数</div>
+            </div>
+            <div class="stat-box">
+                <div id="timer" class="stat-value">00:00</div>
+                <div class="stat-label">时间</div>
+            </div>
+        </div>
+        
+        <div id="status" class="status">
+            准备就绪，请点击"开始"按钮
+        </div>
+    </div>
+    
+    <footer>
+        <p>Shaper &copy; 2023 - 基于TensorFlow.js的健身动作识别应用</p>
+    </footer>
+
+    <!-- 引入TensorFlow.js和PoseNet模型 -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.0.0"></script>
+    
+    <script>
+        // 全局变量
+        let detector;
+        let video;
+        let canvas;
+        let ctx;
+        let poses = [];
+        let isRunning = false;
+        let exerciseType = 'pushup';
+        let count = 0;
+        let startTime = 0;
+        let timerInterval;
+        let lastPoseState = 'unknown';
+        let confidenceThreshold = 0.5;
+        
+        // DOM元素
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const exerciseSelect = document.getElementById('exercise-select');
+        const countElement = document.getElementById('count');
+        const timerElement = document.getElementById('timer');
+        const statusElement = document.getElementById('status');
+        const loadingElement = document.getElementById('loading');
+        const errorElement = document.getElementById('error');
+        
+        // 初始化函数
+        async function init() {
+            try {
+                video = document.getElementById('video');
+                canvas = document.getElementById('canvas');
+                ctx = canvas.getContext('2d');
+                
+                // 设置事件监听器
+                startBtn.addEventListener('click', startExercise);
+                stopBtn.addEventListener('click', stopExercise);
+                resetBtn.addEventListener('click', resetExercise);
+                exerciseSelect.addEventListener('change', (e) => {
+                    exerciseType = e.target.value;
+                    resetExercise();
+                });
+                
+                // 设置姿态检测器
+                await setupDetector();
+                
+                // 设置摄像头
+                await setupCamera();
+                
+                // 调整画布大小
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                // 隐藏加载界面
+                loadingElement.classList.add('hidden');
+                
+                // 启用开始按钮
+                startBtn.disabled = false;
+                
+                // 更新状态
+                statusElement.textContent = '准备就绪，请点击"开始"按钮';
+            } catch (error) {
+                console.error('初始化失败:', error);
+                loadingElement.classList.add('hidden');
+                errorElement.classList.remove('hidden');
+                errorElement.textContent = `初始化失败: ${error.message}`;
+            }
+        }
+        
+        // 设置姿态检测器
+        async function setupDetector() {
+            try {
+                const detectorConfig = {
+                    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+                    enableSmoothing: true
+                };
+                
+                detector = await poseDetection.createDetector(
+                    poseDetection.SupportedModels.MoveNet, 
+                    detectorConfig
+                );
+                
+                console.log('姿态检测器已加载');
+                return true;
+            } catch (error) {
+                console.error('加载姿态检测器失败:', error);
+                loadingElement.classList.add('hidden');
+                errorElement.classList.remove('hidden');
+                return false;
+            }
+        }
+        
+        // 设置摄像头
+        async function setupCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('浏览器不支持摄像头访问');
+            }
+            
+            const constraints = {
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: 'user'
+                }
+            };
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve(video);
+                    };
+                });
+            } catch (error) {
+                console.error('访问摄像头失败:', error);
+                throw new Error('无法访问摄像头，请确保已授予权限');
+            }
+        }
+        
+        // 开始运动
+        function startExercise() {
+            if (isRunning) return;
+            
+            isRunning = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            
+            // 重置计数和时间
+            count = 0;
+            countElement.textContent = count;
+            startTime = Date.now();
+            
+            // 开始计时器
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            // 开始姿态检测循环
+            detectPose();
+            
+            // 更新状态
+            statusElement.textContent = `正在进行${exerciseType === 'pushup' ? '俯卧撑' : '深蹲'}识别...`;
+        }
+        
+        // 停止运动
+        function stopExercise() {
+            if (!isRunning) return;
+            
+            isRunning = false;
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            // 停止计时器
+            clearInterval(timerInterval);
+            
+            // 更新状态
+            statusElement.textContent = `已完成 ${count} 个${exerciseType === 'pushup' ? '俯卧撑' : '深蹲'}`;
+        }
+        
+        // 重置运动
+        function resetExercise() {
+            stopExercise();
+            
+            // 重置计数和时间
+            count = 0;
+            countElement.textContent = count;
+            timerElement.textContent = '00:00';
+            
+            // 重置姿态状态
+            lastPoseState = 'unknown';
+            
+            // 更新状态
+            statusElement.textContent = '准备就绪，请点击"开始"按钮';
+        }
+        
+        // 更新计时器
+        function updateTimer() {
+            const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+            const seconds = (elapsedTime % 60).toString().padStart(2, '0');
+            timerElement.textContent = `${minutes}:${seconds}`;
+        }
+        
+        // 姿态检测循环
+        async function detectPose() {
+            if (!isRunning) return;
+            
+            try {
+                poses = await detector.estimatePoses(video);
+                
+                // 清除画布
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制结果
+                drawResults();
+                
+                // 分析姿态
+                if (poses.length > 0) {
+                    const pose = poses[0];
+                    
+                    if (exerciseType === 'pushup') {
+                        analyzePushup(pose);
+                    } else if (exerciseType === 'squat') {
+                        analyzeSquat(pose);
+                    }
+                }
+                
+                // 继续循环
+                requestAnimationFrame(detectPose);
+            } catch (error) {
+                console.error('姿态检测错误:', error);
+                statusElement.textContent = `检测错误: ${error.message}`;
+                stopExercise();
+            }
+        }
+        
+        // 绘制结果
+        function drawResults() {
+            if (poses.length > 0) {
+                // 绘制骨架
+                drawSkeleton(poses[0]);
+            }
+        }
+        
+        // 绘制骨架
+        function drawSkeleton(pose) {
+            const keypoints = pose.keypoints;
+            
+            // 定义连接关系
+            const connections = [
+                ['nose', 'left_eye'], ['nose', 'right_eye'],
+                ['left_eye', 'left_ear'], ['right_eye', 'right_ear'],
+                ['nose', 'left_shoulder'], ['nose', 'right_shoulder'],
+                ['left_shoulder', 'left_elbow'], ['right_shoulder', 'right_elbow'],
+                ['left_elbow', 'left_wrist'], ['right_elbow', 'right_wrist'],
+                ['left_shoulder', 'right_shoulder'],
+                ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
+                ['left_hip', 'right_hip'],
+                ['left_hip', 'left_knee'], ['right_hip', 'right_knee'],
+                ['left_knee', 'left_ankle'], ['right_knee', 'right_ankle']
+            ];
+            
+            // 创建关键点映射
+            const keypointMap = {};
+            keypoints.forEach(keypoint => {
+                keypointMap[keypoint.name] = keypoint;
+            });
+            
+            // 绘制连接线
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            
+            connections.forEach(connection => {
+                const [p1Name, p2Name] = connection;
+                const p1 = keypointMap[p1Name];
+                const p2 = keypointMap[p2Name];
+                
+                if (p1 && p2 && p1.score > confidenceThreshold && p2.score > confidenceThreshold) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            });
+            
+            // 绘制关键点
+            keypoints.forEach(keypoint => {
+                if (keypoint.score > confidenceThreshold) {
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.arc(keypoint.x, keypoint.y, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            });
+        }
+        
+        // 分析俯卧撑
+        function analyzePushup(pose) {
+            const keypoints = pose.keypoints;
+            const keypointMap = {};
+            
+            keypoints.forEach(keypoint => {
+                keypointMap[keypoint.name] = keypoint;
+            });
+            
+            const leftShoulder = keypointMap['left_shoulder'];
+            const rightShoulder = keypointMap['right_shoulder'];
+            const leftElbow = keypointMap['left_elbow'];
+            const rightElbow = keypointMap['right_elbow'];
+            const leftWrist = keypointMap['left_wrist'];
+            const rightWrist = keypointMap['right_wrist'];
+            
+            // 检查关键点是否可见
+            if (
+                leftShoulder && leftShoulder.score > confidenceThreshold &&
+                rightShoulder && rightShoulder.score > confidenceThreshold &&
+                leftElbow && leftElbow.score > confidenceThreshold &&
+                rightElbow && rightElbow.score > confidenceThreshold &&
+                leftWrist && leftWrist.score > confidenceThreshold &&
+                rightWrist && rightWrist.score > confidenceThreshold
+            ) {
+                // 计算手臂角度
+                const leftArmAngle = calculateAngle(
+                    leftShoulder.x, leftShoulder.y,
+                    leftElbow.x, leftElbow.y,
+                    leftWrist.x, leftWrist.y
+                );
+                
+                const rightArmAngle = calculateAngle(
+                    rightShoulder.x, rightShoulder.y,
+                    rightElbow.x, rightElbow.y,
+                    rightWrist.x, rightWrist.y
+                );
+                
+                // 取平均角度
+                const armAngle = (leftArmAngle + rightArmAngle) / 2;
+                
+                // 判断姿态状态
+                let currentState;
+                if (armAngle < 90) {
+                    currentState = 'down'; // 下降状态
+                } else if (armAngle > 160) {
+                    currentState = 'up'; // 上升状态
+                } else {
+                    currentState = 'middle'; // 中间状态
+                }
+                
+                // 检测完成一次动作
+                if (lastPoseState === 'down' && currentState === 'up') {
+                    count++;
+                    countElement.textContent = count;
+                }
+                
+                // 更新上一次姿态状态
+                lastPoseState = currentState;
+                
+                // 更新状态文本
+                if (currentState === 'down') {
+                    statusElement.textContent = '俯卧撑下降阶段';
+                } else if (currentState === 'up') {
+                    statusElement.textContent = '俯卧撑上升阶段';
+                } else {
+                    statusElement.textContent = '俯卧撑中间阶段';
+                }
+            }
+        }
+        
+        // 分析深蹲
+        function analyzeSquat(pose) {
+            const keypoints = pose.keypoints;
+            const keypointMap = {};
+            
+            keypoints.forEach(keypoint => {
+                keypointMap[keypoint.name] = keypoint;
+            });
+            
+            const leftHip = keypointMap['left_hip'];
+            const rightHip = keypointMap['right_hip'];
+            const leftKnee = keypointMap['left_knee'];
+            const rightKnee = keypointMap['right_knee'];
+            const leftAnkle = keypointMap['left_ankle'];
+            const rightAnkle = keypointMap['right_ankle'];
+            
+            // 检查关键点是否可见
+            if (
+                leftHip && leftHip.score > confidenceThreshold &&
+                rightHip && rightHip.score > confidenceThreshold &&
+                leftKnee && leftKnee.score > confidenceThreshold &&
+                rightKnee && rightKnee.score > confidenceThreshold &&
+                leftAnkle && leftAnkle.score > confidenceThreshold &&
+                rightAnkle && rightAnkle.score > confidenceThreshold
+            ) {
+                // 计算膝盖角度
+                const leftKneeAngle = calculateAngle(
+                    leftHip.x, leftHip.y,
+                    leftKnee.x, leftKnee.y,
+                    leftAnkle.x, leftAnkle.y
+                );
+                
+                const rightKneeAngle = calculateAngle(
+                    rightHip.x, rightHip.y,
+                    rightKnee.x, rightKnee.y,
+                    rightAnkle.x, rightAnkle.y
+                );
+                
+                // 取平均角度
+                const kneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
+                
+                // 判断姿态状态
+                let currentState;
+                if (kneeAngle < 110) {
+                    currentState = 'down'; // 下蹲状态
+                } else if (kneeAngle > 160) {
+                    currentState = 'up'; // 站立状态
+                } else {
+                    currentState = 'middle'; // 中间状态
+                }
+                
+                // 检测完成一次动作
+                if (lastPoseState === 'down' && currentState === 'up') {
+                    count++;
+                    countElement.textContent = count;
+                }
+                
+                // 更新上一次姿态状态
+                lastPoseState = currentState;
+                
+                // 更新状态文本
+                if (currentState === 'down') {
+                    statusElement.textContent = '深蹲下蹲阶段';
+                } else if (currentState === 'up') {
+                    statusElement.textContent = '深蹲站立阶段';
+                } else {
+                    statusElement.textContent = '深蹲中间阶段';
+                }
+            }
+        }
+        
+        // 计算角度
+        function calculateAngle(x1, y1, x2, y2, x3, y3) {
+            const radians = Math.atan2(y3 - y2, x3 - x2) - Math.atan2(y1 - y2, x1 - x2);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            
+            if (angle > 180.0) {
+                angle = 360.0 - angle;
+            }
+            
+            return angle;
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
