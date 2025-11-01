@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shaper - 健身动作识别2</title>
+    <title>Shaper - 健身动作识别3</title>
     <style>
         :root {
             --primary-color: #4CAF50;
@@ -710,6 +710,8 @@
             const rightKnee = keypointMap['right_knee'];
             const leftAnkle = keypointMap['left_ankle'];
             const rightAnkle = keypointMap['right_ankle'];
+            const leftShoulder = keypointMap['left_shoulder'];
+            const rightShoulder = keypointMap['right_shoulder'];
             
             // 检查关键点是否可见
             if (
@@ -733,15 +735,31 @@
                     rightAnkle.x, rightAnkle.y
                 );
                 
-                // 使用更可靠的一侧角度，而不是平均值
-                // 通常前置摄像头中，右侧（用户的左侧）更容易被检测到
-                const kneeAngle = Math.min(leftKneeAngle, rightKneeAngle);
+                // 计算髋部相对于肩部的垂直位置变化（用于判断身体上下移动）
+                let hipHeight = 0;
+                if (leftHip && leftShoulder && rightHip && rightShoulder) {
+                    const leftHipY = leftHip.y;
+                    const rightHipY = rightHip.y;
+                    const avgHipY = (leftHipY + rightHipY) / 2;
+                    
+                    const leftShoulderY = leftShoulder.y;
+                    const rightShoulderY = rightShoulder.y;
+                    const avgShoulderY = (leftShoulderY + rightShoulderY) / 2;
+                    
+                    // 计算髋部与肩部的距离比例（值越小表示越蹲下）
+                    hipHeight = avgShoulderY / avgHipY;
+                }
                 
-                // 判断姿态状态 - 大幅调整阈值以提高准确性
+                // 使用两种方法综合判断：膝盖角度和身体高度变化
+                const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
+                
+                // 判断姿态状态 - 使用综合判断方法
                 let currentState;
-                if (kneeAngle < 110) { // 更严格的下蹲判定
+                
+                // 主要使用膝盖角度判断，辅以身体高度变化
+                if (avgKneeAngle < 120 || hipHeight < 0.65) { 
                     currentState = 'down'; // 下蹲状态
-                } else if (kneeAngle > 150) { // 更严格的站立判定
+                } else if (avgKneeAngle > 160 && hipHeight > 0.85) { 
                     currentState = 'up'; // 站立状态
                 } else {
                     currentState = 'middle'; // 中间状态
@@ -753,15 +771,25 @@
                     stateHistory.shift(); // 保持最近10个状态
                 }
                 
-                // 检测完成一次动作 - 改进计数逻辑
-                if (lastPoseState === 'down' && currentState === 'up') {
-                    count++;
-                    countElement.textContent = count;
-                    console.log('深蹲计数增加! 当前计数:', count);
+                // 状态稳定性检查 - 防止抖动
+                let isStateStable = true;
+                if (stateHistory.length >= 3) {
+                    const lastThreeStates = stateHistory.slice(-3);
+                    isStateStable = lastThreeStates.every(state => state === currentState);
                 }
                 
-                // 更新上一次姿态状态
-                lastPoseState = currentState;
+                // 检测完成一次动作 - 改进计数逻辑
+                // 只有当状态稳定且从下蹲过渡到站立时才计数
+                if (lastPoseState === 'down' && currentState === 'up' && isStateStable) {
+                    count++;
+                    countElement.textContent = count;
+                    console.log('深蹲计数增加! 当前计数:', count, '膝盖角度:', Math.round(avgKneeAngle), '身体高度比例:', hipHeight.toFixed(2));
+                }
+                
+                // 更新上一次姿态状态（只有当状态稳定时才更新）
+                if (isStateStable || lastPoseState === 'unknown') {
+                    lastPoseState = currentState;
+                }
                 
                 // 更新状态文本并添加调试信息
                 let statusText = '';
@@ -774,7 +802,20 @@
                 }
                 
                 if (debugMode) {
-                    statusText += ` | 角度: ${Math.round(kneeAngle)}° | 状态: ${currentState} | 上一状态: ${lastPoseState} | 计数: ${count}`;
+                    statusText += ` | 左膝: ${Math.round(leftKneeAngle)}° | 右膝: ${Math.round(rightKneeAngle)}° | 平均: ${Math.round(avgKneeAngle)}° | 高度比: ${hipHeight.toFixed(2)} | 状态: ${currentState} | 上一状态: ${lastPoseState} | 计数: ${count}`;
+                    
+                    // 在画布上显示角度信息
+                    if (leftKnee && leftKnee.score > confidenceThreshold) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '14px Arial';
+                        ctx.fillText(`${Math.round(leftKneeAngle)}°`, leftKnee.x + 10, leftKnee.y);
+                    }
+                    
+                    if (rightKnee && rightKnee.score > confidenceThreshold) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '14px Arial';
+                        ctx.fillText(`${Math.round(rightKneeAngle)}°`, rightKnee.x + 10, rightKnee.y);
+                    }
                 }
                 
                 statusElement.textContent = statusText;
