@@ -586,16 +586,25 @@
             const rightElbow = keypointMap['right_elbow'];
             const leftWrist = keypointMap['left_wrist'];
             const rightWrist = keypointMap['right_wrist'];
+            const leftHip = keypointMap['left_hip'];
+            const rightHip = keypointMap['right_hip'];
             
             // 检查关键点是否可见
-            if (
+            const shouldersVisible = 
                 leftShoulder && leftShoulder.score > confidenceThreshold &&
-                rightShoulder && rightShoulder.score > confidenceThreshold &&
+                rightShoulder && rightShoulder.score > confidenceThreshold;
+                
+            const armsVisible = 
                 leftElbow && leftElbow.score > confidenceThreshold &&
                 rightElbow && rightElbow.score > confidenceThreshold &&
                 leftWrist && leftWrist.score > confidenceThreshold &&
-                rightWrist && rightWrist.score > confidenceThreshold
-            ) {
+                rightWrist && rightWrist.score > confidenceThreshold;
+                
+            const hipsVisible =
+                leftHip && leftHip.score > confidenceThreshold &&
+                rightHip && rightHip.score > confidenceThreshold;
+            
+            if (shouldersVisible && armsVisible) {
                 // 计算手臂角度
                 const leftArmAngle = calculateAngle(
                     leftShoulder.x, leftShoulder.y,
@@ -609,17 +618,32 @@
                     rightWrist.x, rightWrist.y
                 );
                 
-                // 取平均角度
-                const armAngle = (leftArmAngle + rightArmAngle) / 2;
+                // 使用更可靠的一侧角度，而不是平均值
+                const armAngle = Math.min(leftArmAngle, rightArmAngle);
                 
-                // 判断姿态状态 - 调整阈值使其更容易触发
+                // 检测是否为正面姿态
+                const isFrontFacing = true; // 默认假设为正面姿态
+                
+                // 判断姿态状态 - 针对正面姿态优化阈值
                 let currentState;
-                if (armAngle < 120) { // 放宽下降状态的判定条件
-                    currentState = 'down'; // 下降状态
-                } else if (armAngle > 140) { // 降低上升状态的判定条件
-                    currentState = 'up'; // 上升状态
+                if (isFrontFacing) {
+                    // 正面姿态的俯卧撑判定
+                    if (armAngle < 80) { // 更严格的下降状态判定
+                        currentState = 'down';
+                    } else if (armAngle > 150) { // 更严格的上升状态判定
+                        currentState = 'up';
+                    } else {
+                        currentState = 'middle';
+                    }
                 } else {
-                    currentState = 'middle'; // 中间状态
+                    // 侧面姿态的俯卧撑判定
+                    if (armAngle < 100) {
+                        currentState = 'down';
+                    } else if (armAngle > 150) {
+                        currentState = 'up';
+                    } else {
+                        currentState = 'middle';
+                    }
                 }
                 
                 // 记录状态历史
@@ -632,7 +656,7 @@
                 if (lastPoseState === 'down' && currentState === 'up') {
                     count++;
                     countElement.textContent = count;
-                    console.log('计数增加! 当前计数:', count);
+                    console.log('俯卧撑计数增加! 当前计数:', count, '角度:', Math.round(armAngle));
                 }
                 
                 // 更新上一次姿态状态
@@ -649,7 +673,22 @@
                 }
                 
                 if (debugMode) {
-                    statusText += ` | 角度: ${Math.round(armAngle)}° | 状态: ${currentState} | 上一状态: ${lastPoseState} | 计数: ${count}`;
+                    const leftAngle = Math.round(leftArmAngle);
+                    const rightAngle = Math.round(rightArmAngle);
+                    statusText += ` | 左臂: ${leftAngle}° | 右臂: ${rightAngle}° | 使用角度: ${Math.round(armAngle)}° | 状态: ${currentState} | 上一状态: ${lastPoseState} | 计数: ${count}`;
+                    
+                    // 在画布上显示角度信息
+                    if (leftElbow && leftElbow.score > confidenceThreshold) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '14px Arial';
+                        ctx.fillText(`${leftAngle}°`, leftElbow.x + 10, leftElbow.y);
+                    }
+                    
+                    if (rightElbow && rightElbow.score > confidenceThreshold) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '14px Arial';
+                        ctx.fillText(`${rightAngle}°`, rightElbow.x + 10, rightElbow.y);
+                    }
                 }
                 
                 statusElement.textContent = statusText;
@@ -694,14 +733,15 @@
                     rightAnkle.x, rightAnkle.y
                 );
                 
-                // 取平均角度
-                const kneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
+                // 使用更可靠的一侧角度，而不是平均值
+                // 通常前置摄像头中，右侧（用户的左侧）更容易被检测到
+                const kneeAngle = Math.min(leftKneeAngle, rightKneeAngle);
                 
-                // 判断姿态状态 - 调整阈值使其更容易触发
+                // 判断姿态状态 - 大幅调整阈值以提高准确性
                 let currentState;
-                if (kneeAngle < 130) { // 放宽下蹲状态的判定条件
+                if (kneeAngle < 110) { // 更严格的下蹲判定
                     currentState = 'down'; // 下蹲状态
-                } else if (kneeAngle > 140) { // 降低站立状态的判定条件
+                } else if (kneeAngle > 150) { // 更严格的站立判定
                     currentState = 'up'; // 站立状态
                 } else {
                     currentState = 'middle'; // 中间状态
